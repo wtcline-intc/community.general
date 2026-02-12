@@ -38,7 +38,6 @@ class TestAzureLogAnalyticsIngestion(unittest.TestCase):
         Tests sending data by verifying that the expected POST requests are submitted to the expected hosts.
         """
         # Neither the Mock objects nor its attributes are serializable but we don't care about getting accurate JSON in this case so just return fake JSON data.
-        json_dumps_mock.return_value = '{"name": "fake_json"}'
 
         # The data returned from 'open_url' is only ever read during authentication.
         open_url_mock.return_value.read.return_value = self.fake_access_token
@@ -64,13 +63,16 @@ class TestAzureLogAnalyticsIngestion(unittest.TestCase):
         url = urllib.parse.urlparse(open_url_mock.call_args_list[0][0][0])
         assert url.netloc == "login.microsoftonline.com"
 
-        self.loganalytics.send_to_loganalytics("fake_playbook", task_result_mock(), "OK")
-        self.loganalytics.send_to_loganalytics("fake_playbook", task_result_mock(), "FAILED")
-        self.loganalytics.send_to_loganalytics("fake_playbook", task_result_mock(), "OK")
+        results = ["bar", "biz", "baz"]
+        for i, result in enumerate(results, start=1):
+            task_result_mock = task_result_mock()
+            json_dumps_mock.return_value = '{"foo": "' + result + '"}'
+            self.loganalytics.send_to_loganalytics("fake_playbook", task_result_mock, "OK")
 
-        # Validate the three POST requests for sending data (one for each task).
-        assert open_url_mock.call_count == 4
-        # Three POST requests to the DCE.
-        for i in range(1, 4):
+            assert open_url_mock.call_count == 1 + i
+
             url = urllib.parse.urlparse(open_url_mock.call_args_list[i][0][0])
             assert url.scheme + "://" + url.netloc == self.dce_url
+
+            #assert open_url_mock.call_args_list[i].kwargs == result
+            assert json.loads(open_url_mock.call_args_list[i].kwargs.get("data")).get("foo") == result
